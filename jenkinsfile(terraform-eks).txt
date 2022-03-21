@@ -1,0 +1,80 @@
+pipeline {
+    
+    agent any
+    
+    
+
+    stages {
+        stage('Git checkout'){
+            
+            steps {
+                
+             git branch: 'main', credentialsId: 'github-harshada', url: 'https://github.com/HarshadaDeokar317/terraform-vpc.git'
+             // git branch: 'main', credentialsId: 'github-harshada', url: 'https://github.com/HarshadaDeokar317/eks.git'
+            }
+            
+            
+        }
+        
+        stage('Terraform init'){
+            
+            steps {
+                
+               sh ("terraform init");
+               //   sh ("terraform init --backend-config= "access_key=AKIA2M3VIEP5XUSDSDO6" --backend-config= "secret_key=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")
+            }
+        }
+        
+        stage('Terraform Action'){
+            
+            steps{
+                
+                echo "terraform action from the parameter is --> ${action}"
+                sh("terraform ${action} --auto-approve")
+            }
+        }
+        
+        stage('Configure kubectl to aws'){
+            
+            steps{
+                
+                sh 'aws eks update-kubeconfig --region $(terraform output -raw region) --name $(terraform output -raw cluster_name)'
+            }
+        }
+        
+        stage('Deploy kubernetes metric server'){
+            
+            steps{
+                
+                sh 'wget -O v0.3.6.tar.gz https://codeload.github.com/kubernetes-sigs/metrics-server/tar.gz/v0.3.6 && tar -xzf v0.3.6.tar.gz'
+                sh 'kubectl apply -f metrics-server-0.3.6/deploy/1.8+/'
+                sh 'kubectl get deployment metrics-server -n kube-system'
+            }
+        }
+        
+        stage('Deploy kubernetes Dashboard'){
+            
+            steps{
+                
+                sh 'kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta8/aio/deploy/recommended.yaml'
+            }
+        }
+        
+        stage('Create a proxy server'){
+            
+            steps{
+                sh 'kubectl proxy'
+            }
+        }
+        
+        stage('Authenticate the dashboard'){
+            
+            steps{
+                sh 'kubectl apply -f https://raw.githubusercontent.com/hashicorp/learn-terraform-provision-eks-cluster/main/kubernetes-dashboard-admin.rbac.yaml'
+                sh 'kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep service-controller-token | awk \'{print $1}\')'
+            }
+        }
+        
+    }
+    
+}
